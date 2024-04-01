@@ -30,8 +30,13 @@ size_t i,j;
 void k2c_matmul(float * C, const float * A, const float * B, const size_t outrows,
                 const size_t outcols, const size_t innerdim) {
 
-    // make sure output is empty
-    memset(C, 0, outrows*outcols*sizeof(C[0]));
+    // // make sure output is empty
+    // memset(C, 0, outrows*outcols*sizeof(C[0]));
+
+    // Initaialization by loop
+    for(i=0;i<outrows*outcols;i++){
+        C[i]=0;
+    }
 
     for (i=0 ; i < outrows; ++i) {
         const size_t outrowidx = i*outcols;
@@ -63,7 +68,12 @@ void k2c_affine_matmul(float * C, const float * A, const float * B, const float 
                        const size_t outrows,const size_t outcols, const size_t innerdim) {
 
     // make sure output is empty
-    memset(C, 0, outrows*outcols*sizeof(C[0]));
+    // memset(C, 0, outrows*outcols*sizeof(C[0]));
+
+    // Initaialization by loop
+    for(i=0;i<outrows*outcols;i++){
+        C[i]=0;
+    }
 
     for (i=0 ; i < outrows; ++i) {
         const size_t outrowidx = i*outcols;

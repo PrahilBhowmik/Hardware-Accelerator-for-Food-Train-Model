@@ -48,7 +48,11 @@ void k2c_global_max_pooling(k2c_tensor* output, const k2c_tensor* input) {
 void k2c_global_avg_pooling(k2c_tensor* output, const k2c_tensor* input) {
 
     const size_t in_chan = input->shape[input->ndim-1];
-    memset(output->array,0,output->numel*sizeof(input->array[0]));
+    // memset(output->array,0,output->numel*sizeof(input->array[0]));
+    // Initaialization by loop
+    for(i=0;i<output->numel;i++){
+        output->array[i]=0;
+    }
     const float num_inv = 1.0f/(input->numel/in_chan);
 
     for (i=0; i<input->numel; i+=in_chan) {

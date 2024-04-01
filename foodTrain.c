@@ -432,8 +432,16 @@ void foodTrain(k2c_tensor *input_1_input, k2c_tensor *activation_output)
 	k2c_softmax(dense_output.array, dense_output.numel);
 	activation_output->ndim = dense_output.ndim; // copy data into output struct
 	activation_output->numel = dense_output.numel;
-	memcpy(activation_output->shape, dense_output.shape, K2C_MAX_NDIM * sizeof(size_t));
-	memcpy(activation_output->array, dense_output.array, activation_output->numel * sizeof(activation_output->array[0]));
+	// memcpy(activation_output->shape, dense_output.shape, K2C_MAX_NDIM * sizeof(size_t));
+	// memcpy(activation_output->array, dense_output.array, activation_output->numel * sizeof(activation_output->array[0]));
+
+	//Copy by loop
+	for(i=0;i<K2C_MAX_NDIM;i++){
+		activation_output->shape[i] = dense_output.shape[i];
+	}
+	for(i=0;i<activation_output->numel;i++){
+		activation_output->array[i] = dense_output.array[i];
+	}
 }
 
 void foodTrain_initialize()
