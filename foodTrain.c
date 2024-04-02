@@ -2,9 +2,9 @@
 #include <string.h>
 #include "./include/k2c_include.h"
 #include "./include/k2c_tensor_include.h"
-#include "./include/k2c_pooling_layers.h"
 #include "./include/k2c_activations.h"
-#include "./include/k2c_core_layers.h"
+
+size_t i,j;
 
 void foodTrain(k2c_tensor *input_1_input, k2c_tensor *activation_output)
 {
@@ -450,4 +450,336 @@ void foodTrain_initialize()
 
 void foodTrain_terminate()
 {
+}
+
+void k2c_global_avg_pooling(k2c_tensor* output, const k2c_tensor* input) {
+
+    const size_t in_chan = input->shape[input->ndim-1];
+    // memset(output->array,0,output->numel*sizeof(input->array[0]));
+    // Initaialization by loop
+    for(i=0;i<output->numel;i++){
+        output->array[i]=0;
+    }
+    const float num_inv = 1.0f/(input->numel/in_chan);
+
+    for (i=0; i<input->numel; i+=in_chan) {
+        for (size_t j=0; j<in_chan; ++j) {
+            output->array[j] += input->array[i+j]*num_inv;
+        }
+    }
+}
+
+/**
+ * Dense (fully connected) Layer.
+ *
+ * :param output: output tensor.
+ * :param input: input tensor.
+ * :param kernel: kernel tensor.
+ * :param bias: bias tensor.
+ * :param activation: activation function to apply to output.
+ * :param fwork: array of working space, size(fwork) = size(input) + size(kernel)
+ */
+void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* kernel,
+               const k2c_tensor* bias, k2c_activationType *activation, float * fwork) {
+
+    if (input->ndim <=2) {
+        size_t outrows;
+
+        if (input->ndim>1) {
+            outrows = input->shape[0];
+        }
+        else {
+            outrows = 1;
+        }
+        const size_t outcols = kernel->shape[1];
+        const size_t innerdim = kernel->shape[0];
+        const size_t outsize = outrows*outcols;
+        k2c_affine_matmul(output->array,input->array,kernel->array,bias->array,
+                          outrows,outcols,innerdim);
+        activation(output->array,outsize);
+    }
+    else {
+        const size_t axesA[1] = {input->ndim-1};
+        const size_t axesB[1] = {0};
+        const size_t naxes = 1;
+        const int normalize = 0;
+
+        k2c_dot(output, input, kernel, axesA, axesB, naxes, normalize, fwork);
+        k2c_bias_add(output, bias);
+        activation(output->array, output->numel);
+    }
+}
+
+/**
+ * Just your basic 1d matrix multipication.
+ * computes C = A*B
+ * assumes A,B,C are all 1d arrays of matrices stored in row major order.
+ *
+ * :param C: output array.
+ * :param A: input array 1.
+ * :param B: input array 2.
+ * :param outrows: number of rows of C and A.
+ * :param outcols: number of cols of C and B.
+ * :param innderdim: number of cols of A and rows of B
+ */
+void k2c_matmul(float * C, const float * A, const float * B, const size_t outrows,
+                const size_t outcols, const size_t innerdim) {
+
+    // // make sure output is empty
+    // memset(C, 0, outrows*outcols*sizeof(C[0]));
+
+    // Initaialization by loop
+    for(i=0;i<outrows*outcols;i++){
+        C[i]=0;
+    }
+
+    for (i=0 ; i < outrows; ++i) {
+        const size_t outrowidx = i*outcols;
+        const size_t inneridx = i*innerdim;
+        for (size_t k = 0; k < innerdim; ++k) {
+            for (size_t j = 0;  j < outcols; ++j) {
+                C[outrowidx+j] += A[inneridx+k] * B[k*outcols+j];
+            }
+        }
+    }
+}
+
+
+/**
+ * Affine matrix multiplication.
+ * computes C = A*B + d, where d is a vector that is added to each
+ row of A*B
+ * assumes A,B,C are all 1d arrays of matrices stored in row major order
+ *
+ * :param C: output array.
+ * :param A: input array 1.
+ * :param B: input array 2.
+ * :param d: input array 3.
+ * :param outrows: number of rows of C and A.
+ * :param outcols: number of cols of C, B and d.
+ * :param innderdim: number of cols of A and rows of B
+ */
+void k2c_affine_matmul(float * C, const float * A, const float * B, const float * d,
+                       const size_t outrows,const size_t outcols, const size_t innerdim) {
+
+    // make sure output is empty
+    // memset(C, 0, outrows*outcols*sizeof(C[0]));
+
+    // Initaialization by loop
+    for(i=0;i<outrows*outcols;i++){
+        C[i]=0;
+    }
+
+    for (i=0 ; i < outrows; ++i) {
+        const size_t outrowidx = i*outcols;
+        const size_t inneridx = i*innerdim;
+        for (size_t j = 0;  j < outcols; ++j) {
+            for (size_t k = 0; k < innerdim; ++k) {
+                C[outrowidx+j] += A[inneridx+k] * B[k*outcols+j];
+            }
+            C[outrowidx+j] += d[j];
+        }
+    }
+}
+
+
+/**
+ * Converts subscripts to linear indices in row major order.
+ *
+ * :param sub: array[ndim] subscript to convert.
+ * :param shape: array[ndim] shape of array being indexed.
+ * :param ndim: number of dimensions of array being indexed.
+ * :return: linear index in row major order.
+ */
+size_t k2c_sub2idx(const size_t * sub, const size_t * shape, const size_t ndim) {
+
+    size_t idx = 0;
+    size_t temp = 0;
+    for (i=0; i<ndim; ++i) {
+        temp = sub[i];
+        for (size_t j=ndim-1; j>i; --j) {
+            temp *= shape[j];
+        }
+        idx += temp;
+    }
+    return idx;
+}
+
+
+/**
+ * Converts linear indices to subscripts in row major order.
+ *
+ * :param idx: linear index in row major order.
+ * :param sub: array[ndim] output subscript.
+ * :param shape: array[ndim] shape of array being indexed.
+ * :param ndim: number of dimensions of array being indexed.
+ */
+void k2c_idx2sub(const size_t idx, size_t * sub, const size_t * shape, const size_t ndim) {
+
+    size_t idx2 = idx;
+    for (int i=ndim-1; i>=0; --i) {
+        sub[i] = idx2%shape[i];
+        idx2 /= shape[i];
+    }
+}
+
+
+/**
+ * Dot product (tensor contraction) between 2 tensors. C=A*B
+ *
+ * :param C: output tensor.
+ * :param A: input tensor 1.
+ * :param B: input tensor 2.
+ * :param axesA: array[naxes] of axes of A being contracted.
+ * :param axesB: array[naxes] of axes of B being contracted.
+ * :param naxes: number of axes being contracted from each input.
+ * :param normalize: (0,1) whether to L2-normalize samples along the dot product axis before taking the dot product. If set to 1, then the output of the dot product is the cosine proximity between the two samples.
+ * :param fwork: array of working space, size(fwork) = size(A) + size(B)
+ */
+void k2c_dot(k2c_tensor* C, const k2c_tensor* A, const k2c_tensor* B, const size_t * axesA,
+             const size_t * axesB, const size_t naxes, const int normalize, float * fwork) {
+
+    size_t permA[K2C_MAX_NDIM];
+    size_t permB[K2C_MAX_NDIM];
+    size_t prod_axesA = 1;
+    size_t prod_axesB = 1;
+    size_t free_axesA, free_axesB;
+    size_t freeA[K2C_MAX_NDIM];
+    size_t freeB[K2C_MAX_NDIM];
+    size_t count;
+    int isin;
+    size_t newshpA[K2C_MAX_NDIM];
+    size_t newshpB[K2C_MAX_NDIM];
+    const size_t ndimA = A->ndim;
+    const size_t ndimB = B->ndim;
+    float *reshapeA = &fwork[0];   // temp working storage
+    float *reshapeB = &fwork[A->numel];
+    size_t Asub[K2C_MAX_NDIM];
+    size_t Bsub[K2C_MAX_NDIM];
+    // find which axes are free (ie, not being summed over)
+    count=0;
+    for (i=0; i<ndimA; ++i) {
+        isin = 0;
+        for (j=0; j<naxes; ++j) {
+            if (i==axesA[j]) {
+                isin=1;
+            }
+        }
+        if (!isin) {
+            freeA[count] = i;
+            ++count;
+        }
+    }
+    count=0;
+    for (i=0; i<ndimB; ++i) {
+        isin = 0;
+        for (j=0; j<naxes; ++j) {
+            if (i==axesB[j]) {
+                isin=1;
+            }
+        }
+        if (!isin) {
+            freeB[count] = i;
+            ++count;
+        }
+    }
+
+    // number of elements in inner dimension
+    for (i=0; i < naxes; ++i) {
+        prod_axesA *= A->shape[axesA[i]];
+    }
+    for (i=0; i < naxes; ++i) {
+        prod_axesB *= B->shape[axesB[i]];
+    }
+    // number of elements in free dimension
+    free_axesA = A->numel/prod_axesA;
+    free_axesB = B->numel/prod_axesB;
+    // find permutation of axes to get into matmul shape
+    for (i=0; i<ndimA-naxes; ++i) {
+        permA[i] = freeA[i];
+    }
+    for (i=ndimA-naxes, j=0; i<ndimA; ++i, ++j) {
+        permA[i] = axesA[j];
+    }
+    for (i=0; i<naxes; ++i) {
+        permB[i] = axesB[i];
+    }
+    for (i=naxes, j=0; i<ndimB; ++i, ++j) {
+        permB[i] = freeB[j];
+    }
+
+
+
+    for (i=0; i<ndimA; ++i) {
+        newshpA[i] = A->shape[permA[i]];
+    }
+    for (i=0; i<ndimB; ++i) {
+        newshpB[i] = B->shape[permB[i]];
+    }
+
+    // reshape arrays
+    for (i=0; i<A->numel; ++i) {
+        k2c_idx2sub(i,Asub,A->shape,ndimA);
+        for (j=0; j<ndimA; ++j) {
+            Bsub[j] = Asub[permA[j]];
+        }
+        size_t bidx = k2c_sub2idx(Bsub,newshpA,ndimA);
+        reshapeA[bidx] = A->array[i];
+    }
+
+    for (i=0; i<B->numel; ++i) {
+        k2c_idx2sub(i,Bsub,B->shape,ndimB);
+        for (j=0; j<ndimB; ++j) {
+            Asub[j] = Bsub[permB[j]];
+        }
+        size_t bidx = k2c_sub2idx(Asub,newshpB,ndimB);
+        reshapeB[bidx] = B->array[i];
+    }
+
+
+    if (normalize) {
+
+        float sum;
+        float inorm;
+        for (i=0; i<free_axesA; ++i) {
+            sum = 0;
+            for (j=0; j<prod_axesA; ++j) {
+                sum += reshapeA[i*prod_axesA + j]*reshapeA[i*prod_axesA + j];
+            }
+            inorm = 1.0f/sqrtf(sum);
+            for (j=0; j<prod_axesA; ++j) {
+                reshapeA[i*prod_axesA + j] *= inorm;
+            }
+        }
+        for (i=0; i<free_axesB; ++i) {
+            sum = 0;
+            for (j=0; j<prod_axesB; ++j) {
+                sum += reshapeB[i + free_axesB*j]*reshapeB[i + free_axesB*j];
+            }
+            inorm = 1.0f/sqrtf(sum);
+            for (j=0; j<prod_axesB; ++j) {
+                reshapeB[i + free_axesB*j] *= inorm;
+            }
+        }
+    }
+
+    k2c_matmul(C->array, reshapeA, reshapeB, free_axesA,
+               free_axesB, prod_axesA);
+}
+
+
+/**
+ * Adds bias vector b to tensor A.
+ * assumes b is a rank 1 tensor that is added to the last dimension of A.
+ *
+ * :param A: input tensor. Overwritten with outputs.
+ * :param b: bias tensor.
+ */
+void k2c_bias_add(k2c_tensor* A, const k2c_tensor* b) {
+
+    for (i=0; i<A->numel; i+=b->numel) {
+        for (j=0; j<b->numel; ++j) {
+            A->array[i+j] += b->array[j];
+        }
+    }
 }
