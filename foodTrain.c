@@ -2,7 +2,6 @@
 #include <string.h>
 #include "./include/k2c_include.h"
 #include "./include/k2c_tensor_include.h"
-#include "./include/k2c_activations.h"
 
 size_t i,j;
 
@@ -428,8 +427,8 @@ void foodTrain(k2c_tensor *input_1_input, k2c_tensor *activation_output)
 
 	k2c_global_avg_pooling(&global_average_pooling2d_output, input_1_input);
 	k2c_dense(&dense_output, &global_average_pooling2d_output, &dense_kernel,
-			  &dense_bias, k2c_relu, dense_fwork);
-	k2c_softmax(dense_output.array, dense_output.numel);
+			  &dense_bias, dense_fwork);
+	k2c_softmax_func(dense_output.array, dense_output.numel);
 	activation_output->ndim = dense_output.ndim; // copy data into output struct
 	activation_output->numel = dense_output.numel;
 	// memcpy(activation_output->shape, dense_output.shape, K2C_MAX_NDIM * sizeof(size_t));
@@ -480,7 +479,7 @@ void k2c_global_avg_pooling(k2c_tensor* output, const k2c_tensor* input) {
  * :param fwork: array of working space, size(fwork) = size(input) + size(kernel)
  */
 void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* kernel,
-               const k2c_tensor* bias, k2c_activationType *activation, float * fwork) {
+               const k2c_tensor* bias, float * fwork) {
 
     if (input->ndim <=2) {
         size_t outrows;
@@ -496,7 +495,7 @@ void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* ke
         const size_t outsize = outrows*outcols;
         k2c_affine_matmul(output->array,input->array,kernel->array,bias->array,
                           outrows,outcols,innerdim);
-        activation(output->array,outsize);
+        k2c_relu_func(output->array,outsize);
     }
     else {
         const size_t axesA[1] = {input->ndim-1};
@@ -506,7 +505,7 @@ void k2c_dense(k2c_tensor* output, const k2c_tensor* input, const k2c_tensor* ke
 
         k2c_dot(output, input, kernel, axesA, axesB, naxes, normalize, fwork);
         k2c_bias_add(output, bias);
-        activation(output->array, output->numel);
+        k2c_relu_func(output->array, output->numel);
     }
 }
 
@@ -780,6 +779,39 @@ void k2c_bias_add(k2c_tensor* A, const k2c_tensor* b) {
     for (i=0; i<A->numel; i+=b->numel) {
         for (j=0; j<b->numel; ++j) {
             A->array[i+j] += b->array[j];
+        }
+    }
+}
+
+void k2c_softmax_func(float * x, const size_t size) {
+
+    float xmax = x[0];
+    float sum = 0;
+    for (i=0; i < size; ++i) {
+        if (x[i]>xmax) {
+            xmax = x[i];
+        }
+    }
+
+    for (i=0; i < size; ++i) {
+        x[i] = expf(x[i]-xmax);
+    }
+
+    for (i=0; i < size; ++i) {
+        sum += x[i];
+    }
+
+    sum = 1.0f/sum;
+    for (i=0; i < size; ++i) {
+        x[i] = x[i]*sum;
+    }
+}
+
+void k2c_relu_func(float * x, const size_t size) {
+
+    for (i=0; i < size; ++i) {
+        if (x[i] <= 0.0f) {
+            x[i] = 0.0f;
         }
     }
 }
