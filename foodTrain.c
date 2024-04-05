@@ -1,6 +1,25 @@
 #include <math.h>
 #include <string.h>
-#include "./include/k2c_include.h"
+
+#define K2C_MAX_NDIM 5
+
+// Prototypes
+void k2c_global_avg_pooling(size_t output_numel, float output_array[],float input_array[]);
+void k2c_matmul(float * C, const float * A, const float * B, const size_t outrows,
+                const size_t outcols, const size_t innerdim);
+void k2c_affine_matmul(float * C, const float * A, const float * B, const float * d,
+                       const size_t outrows,const size_t outcols, const size_t innerdim);
+size_t k2c_sub2idx(const size_t * sub, const size_t * shape, const size_t ndim);
+void k2c_idx2sub(const size_t idx, size_t * sub, const size_t * shape, const size_t ndim);
+void k2c_dot(float C_array[], const float A_array[],const size_t A_ndim, const size_t A_numel, const size_t A_shape[],
+	const float B_array[], const size_t B_ndim, const size_t B_numel, const size_t B_shape[],
+	const size_t * axesA,const size_t * axesB, const size_t naxes, const int normalize, float fwork[]);
+void k2c_bias_add(float A_array[], size_t A_numel, const float b_array[], size_t b_numel);
+void k2c_relu_func(float * x, const size_t size);
+void k2c_dense(float output_array[],size_t output_numel, const float input_array[], const size_t input_numel, const size_t input_shape[],
+	const size_t input_ndim, const float kernel_array[],const size_t kernel_numel,const size_t kernel_shape[], const size_t kernel_ndim,
+	const float bias_array[], const size_t bias_numel,float fwork[]);
+void k2c_softmax_func(float * x, const size_t size);
 
 size_t i,j;
 
@@ -437,8 +456,7 @@ void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input
 	// k2c_tensor dense_bias = createK2cTensor1(dense_bias_array, 1, 101, dims2);
 	static float dense_fwork[306] = {0};
 
-	k2c_global_avg_pooling(global_average_pooling2d_output_shape,global_average_pooling2d_output_numel,
-		global_average_pooling2d_output_array, input_1_input_shape,input_1_input_ndim,input_1_input_numel,input_1_input_array);
+	k2c_global_avg_pooling(global_average_pooling2d_output_numel,global_average_pooling2d_output_array,input_1_input_array);
 	k2c_dense(dense_output_array, dense_output_numel, global_average_pooling2d_output_array, global_average_pooling2d_output_numel,
 	global_average_pooling2d_output_shape,global_average_pooling2d_output_ndim,dense_kernel_array,dense_kernel_numel,
 	dense_kernel_shape, dense_kernel_ndim,dense_bias_array, dense_bias_numel, dense_fwork);
@@ -465,18 +483,14 @@ void foodTrain_terminate()
 {
 }
 
-void k2c_global_avg_pooling(size_t output_shape[5],size_t output_numel, float output_array[3], 
-	const size_t input_shape[5],const size_t input_ndim, size_t input_numel,float input_array[150528]) {
-
-    const size_t in_chan = input_shape[input_ndim-1];
-    // memset(output_array,0,output_numel*sizeof(input_array[0]));
-    // Initaialization by loop
-    for(i=0;i<output_numel;i++){
+void k2c_global_avg_pooling(size_t output_numel, float output_array[3], float input_array[150528]) {
+	static const size_t in_chan = 3;
+    for(i=0;i<3;i++){
         output_array[i]=0;
     }
-    const float num_inv = 1.0f/(input_numel/in_chan);
+    const float num_inv = 1.0f/(150528/in_chan);
 
-    for (i=0; i<input_numel; i+=in_chan) {
+    for (i=0; i<150528; i+=in_chan) {
         for (size_t j=0; j<in_chan; ++j) {
             output_array[j] += input_array[i+j]*num_inv;
         }
