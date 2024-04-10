@@ -3,13 +3,6 @@
 
 #define K2C_MAX_NDIM 5
 
-// Prototypes
-void k2c_global_avg_pooling(float output_array[],float input_array[]);
-void k2c_affine_matmul(float C[], const float A[], const float B[], const float d[]);
-void k2c_relu_func(float x[]);
-void k2c_dense(float output_array[], const float input_array[], const float kernel_array[],const float bias_array[]);
-void k2c_softmax_func(float x[]);
-
 size_t i,j,k;
 
 void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input_1_input_shape[5],float input_1_input_array[150528], 
@@ -430,14 +423,49 @@ void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input
 		+0.00000000e+00f,
 	};
 
-	k2c_global_avg_pooling(global_average_pooling2d_output_array,input_1_input_array);
-	// k2c_dense(dense_output_array,global_average_pooling2d_output_array,dense_kernel_array,dense_bias_array);
-	k2c_affine_matmul(dense_output_array,global_average_pooling2d_output_array,dense_kernel_array,dense_bias_array);
-	k2c_relu_func(dense_output_array);
-	k2c_softmax_func(dense_output_array);
+	const float num_inv = 1.0f/(150528/3);
+    for (i=0; i<150528; i+=3) {
+        for (j=0; j<3; ++j) {
+            global_average_pooling2d_output_array[j] += input_1_input_array[i+j]*num_inv;
+        }
+    }
+
+	for (j = 0;  j < 101; ++j) {
+		for (k = 0; k < 3; ++k) {
+			dense_output_array[j] += global_average_pooling2d_output_array[k] * dense_kernel_array[k*101+j];
+		}
+		dense_output_array[j] += dense_bias_array[j];
+	}
+	
+	for (i=0; i < 101; ++i) {
+        if (dense_output_array[i] <= 0.0f) {
+            dense_output_array[i] = 0.0f;
+        }
+    }
+
+	float xmax = dense_output_array[0];
+    float sum = 0;
+    for (i=0; i < 101; ++i) {
+        if (dense_output_array[i]>xmax) {
+            xmax = dense_output_array[i];
+        }
+    }
+    for (i=0; i < 101; ++i) {
+        dense_output_array[i] = expf(dense_output_array[i]-xmax);
+    }
+
+    for (i=0; i < 101; ++i) {
+        sum += dense_output_array[i];
+    }
+    sum = 1.0f/sum;
+    for (i=0; i < 101; ++i) {
+        dense_output_array[i] = dense_output_array[i]*sum;
+    }
+
 	for(i=0;i<5;i++){
 		activation_output_shape[i] = dense_output_shape[i];
 	}
+
 	for(i=0;i<101;i++){
 		activation_output_array[i] = dense_output_array[i];
 	}
@@ -449,58 +477,4 @@ void foodTrain_initialize()
 
 void foodTrain_terminate()
 {
-}
-
-void k2c_global_avg_pooling(float output_array[3], float input_array[150528]) {
-    // for(i=0;i<3;i++){
-    //     output_array[i]=0;
-    // }
-    const float num_inv = 1.0f/(150528/3);
-    for (i=0; i<150528; i+=3) {
-        for (j=0; j<3; ++j) {
-            output_array[j] += input_array[i+j]*num_inv;
-        }
-    }
-}
-
-void k2c_affine_matmul(float C[], const float A[], const float B[], const float d[]) {
-    // for(i=0;i<101;i++){
-    //     C[i]=0;
-    // }
-	for (j = 0;  j < 101; ++j) {
-		for (k = 0; k < 3; ++k) {
-			C[j] += A[k] * B[k*101+j];
-		}
-		C[j] += d[j];
-	}
-}
-
-
-void k2c_softmax_func(float x[]) {
-    float xmax = x[0];
-    float sum = 0;
-    for (i=0; i < 101; ++i) {
-        if (x[i]>xmax) {
-            xmax = x[i];
-        }
-    }
-    for (i=0; i < 101; ++i) {
-        x[i] = expf(x[i]-xmax);
-    }
-
-    for (i=0; i < 101; ++i) {
-        sum += x[i];
-    }
-    sum = 1.0f/sum;
-    for (i=0; i < 101; ++i) {
-        x[i] = x[i]*sum;
-    }
-}
-
-void k2c_relu_func(float x[]) {
-    for (i=0; i < 101; ++i) {
-        if (x[i] <= 0.0f) {
-            x[i] = 0.0f;
-        }
-    }
 }
