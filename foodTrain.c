@@ -5,10 +5,9 @@
 
 size_t i,j,k;
 
-void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input_1_input_shape[5],float input_1_input_array[150528], 
-	size_t activation_output_ndim,size_t activation_output_numel,size_t activation_output_shape[5],float activation_output_array[101]){
+void foodTrain(float input_1_input_array[150528],float activation_output_array[101]){
 
-	static float dense_kernel_array[303] = {
+	static const float dense_kernel_array[303] = {
 		-1.87843233e-01f,
 		-1.91770092e-01f,
 		-3.80743816e-02f,
@@ -314,7 +313,7 @@ void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input
 		-2.11383045e-01f,
 	};
 	
-	static float dense_bias_array[101] = {
+	static const float dense_bias_array[101] = {
 		+0.00000000e+00f,
 		+0.00000000e+00f,
 		-1.94982097e-01f,
@@ -433,17 +432,18 @@ void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input
 	global_avg_b *= num_inv;
 	global_avg_c *= num_inv;
 
-	float temp;
 	for (j = 0;  j < 101; ++j) {
 		#pragma HLS pipeline II=1
-		float temp = global_avg_a * dense_kernel_array[j];
-		temp += global_avg_b * dense_kernel_array[101+j];
-		temp += global_avg_c * dense_kernel_array[202+j];
-		temp += dense_bias_array[j];
-		activation_output_array[j] = temp;
+		float temp1 = global_avg_a * dense_kernel_array[j];
+		float temp2 = global_avg_b * dense_kernel_array[101+j];
+		float temp3 = global_avg_c * dense_kernel_array[202+j];
+		temp1 += dense_bias_array[j];
+		temp2 += temp2;
+		activation_output_array[j] = temp1+temp2;
 	}
 	
 	for (i=0; i < 101; ++i) {
+		// #pragma HLS unroll factor=2
         if (activation_output_array[i] <= 0.0f) {
             activation_output_array[i] = 0.0f;
         }
@@ -458,15 +458,14 @@ void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input
     }
 	
     for (i=0; i < 101; ++i) {
+		// #pragma HLS unroll factor=2
         activation_output_array[i] = expf(activation_output_array[i]-xmax);
-    }
-
-    for (i=0; i < 101; ++i) {
-        sum += activation_output_array[i];
+		sum += activation_output_array[i];
     }
 
     sum = 1.0f/sum;
     for (i=0; i < 101; ++i) {
+		// #pragma HLS unroll factor=2
         activation_output_array[i] = activation_output_array[i]*sum;
     }
 }
