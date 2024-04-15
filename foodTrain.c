@@ -8,11 +8,6 @@ size_t i,j,k;
 void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input_1_input_shape[5],float input_1_input_array[150528], 
 	size_t activation_output_ndim,size_t activation_output_numel,size_t activation_output_shape[5],float activation_output_array[101]){
 
-	static float global_average_pooling2d_output_array[3] = {0};
-
-	static float dense_output_array[101] = {0};
-	static size_t dense_output_shape[5] = {101, 1, 1, 1, 1};
-	
 	static float dense_kernel_array[303] = {
 		-1.87843233e-01f,
 		-1.91770092e-01f,
@@ -423,52 +418,57 @@ void foodTrain(size_t input_1_input_ndim,size_t input_1_input_numel,size_t input
 		+0.00000000e+00f,
 	};
 
+	// #pragma HLS array_partition variable=input_1_input_array type=cyclic  factor=3
+
 	const float num_inv = 1.0f/(150528/3);
+	float global_avg_a=0,global_avg_b=0,global_avg_c=0;
     for (i=0; i<150528; i+=3) {
-        for (j=0; j<3; ++j) {
-            global_average_pooling2d_output_array[j] += input_1_input_array[i+j]*num_inv;
-        }
+		#pragma HLS pipeline II=1
+        global_avg_a += input_1_input_array[i];
+		global_avg_b += input_1_input_array[i+1];
+		global_avg_c += input_1_input_array[i+2];
     }
 
+	global_avg_a *= num_inv;
+	global_avg_b *= num_inv;
+	global_avg_c *= num_inv;
+
+	float temp;
 	for (j = 0;  j < 101; ++j) {
-		for (k = 0; k < 3; ++k) {
-			dense_output_array[j] += global_average_pooling2d_output_array[k] * dense_kernel_array[k*101+j];
-		}
-		dense_output_array[j] += dense_bias_array[j];
+		#pragma HLS pipeline II=1
+		float temp = global_avg_a * dense_kernel_array[j];
+		temp += global_avg_b * dense_kernel_array[101+j];
+		temp += global_avg_c * dense_kernel_array[202+j];
+		temp += dense_bias_array[j];
+		activation_output_array[j] = temp;
 	}
 	
 	for (i=0; i < 101; ++i) {
-        if (dense_output_array[i] <= 0.0f) {
-            dense_output_array[i] = 0.0f;
+        if (activation_output_array[i] <= 0.0f) {
+            activation_output_array[i] = 0.0f;
         }
     }
 
-	float xmax = dense_output_array[0];
+	float xmax = activation_output_array[0];
     float sum = 0;
-    for (i=0; i < 101; ++i) {
-        if (dense_output_array[i]>xmax) {
-            xmax = dense_output_array[i];
+    for (i=1; i < 101; ++i) {
+        if (activation_output_array[i]>xmax) {
+            xmax = activation_output_array[i];
         }
     }
+	
     for (i=0; i < 101; ++i) {
-        dense_output_array[i] = expf(dense_output_array[i]-xmax);
+        activation_output_array[i] = expf(activation_output_array[i]-xmax);
     }
 
     for (i=0; i < 101; ++i) {
-        sum += dense_output_array[i];
+        sum += activation_output_array[i];
     }
+
     sum = 1.0f/sum;
     for (i=0; i < 101; ++i) {
-        dense_output_array[i] = dense_output_array[i]*sum;
+        activation_output_array[i] = activation_output_array[i]*sum;
     }
-
-	for(i=0;i<5;i++){
-		activation_output_shape[i] = dense_output_shape[i];
-	}
-
-	for(i=0;i<101;i++){
-		activation_output_array[i] = dense_output_array[i];
-	}
 }
 
 void foodTrain_initialize()

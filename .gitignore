@@ -2,3 +2,4 @@ Demo
 *.log
 .vscode
 Rough
+CPP_VERSION*
