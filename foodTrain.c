@@ -419,7 +419,6 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 
 	// #pragma HLS array_partition variable=input_1_input_array type=cyclic  factor=3
 
-	const float num_inv = 1.0f/(150528/3);
 	float global_avg_a=0,global_avg_b=0,global_avg_c=0;
     for (i=0; i<150528; i+=3) {
 		#pragma HLS pipeline II=1
@@ -428,9 +427,10 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 		global_avg_c += input_1_input_array[i+2];
     }
 
-	global_avg_a *= num_inv;
-	global_avg_b *= num_inv;
-	global_avg_c *= num_inv;
+	const float num_inv = 150528/3;
+	global_avg_a /= num_inv;
+	global_avg_b /= num_inv;
+	global_avg_c /= num_inv;
 
 	for (j = 0;  j < 101; ++j) {
 		#pragma HLS pipeline II=1
@@ -438,25 +438,22 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 		float temp2 = global_avg_b * dense_kernel_array[101+j];
 		float temp3 = global_avg_c * dense_kernel_array[202+j];
 		temp1 += dense_bias_array[j];
-		temp2 += temp2;
+		temp2 += temp3;
 		activation_output_array[j] = temp1+temp2;
 	}
 	
+	float xmax = 0.0f;
 	for (i=0; i < 101; ++i) {
 		// #pragma HLS unroll factor=2
-        if (activation_output_array[i] <= 0.0f) {
+        if (activation_output_array[i] < 0.0f) {
             activation_output_array[i] = 0.0f;
         }
-    }
-
-	float xmax = activation_output_array[0];
-    float sum = 0;
-    for (i=1; i < 101; ++i) {
-        if (activation_output_array[i]>xmax) {
+		else if (activation_output_array[i]>xmax) {
             xmax = activation_output_array[i];
         }
     }
 	
+	float sum = 0;
     for (i=0; i < 101; ++i) {
 		// #pragma HLS unroll factor=2
         activation_output_array[i] = expf(activation_output_array[i]-xmax);
