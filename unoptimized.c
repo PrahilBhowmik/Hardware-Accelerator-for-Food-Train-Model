@@ -6,8 +6,6 @@
 size_t i,j,k;
 
 void foodTrain(float input_1_input_array[150528],float activation_output_array[101]){
-	#pragma HLS ARRAY_PARTITION variable=input_1_input_array cyclic factor=12
-	
 	static const float dense_kernel_array[303] = {
 		-1.87843233e-01f,
 		-1.91770092e-01f,
@@ -418,85 +416,20 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 		+0.00000000e+00f,
 	};
 
-	float global_avg_a=0, global_avg_b=0, global_avg_c=0,
-      global_avg_a1=0, global_avg_b1=0, global_avg_c1=0,
-      global_avg_a2=0, global_avg_b2=0, global_avg_c2=0,
-      global_avg_a3=0, global_avg_b3=0, global_avg_c3=0,
-      global_avg_a4=0, global_avg_b4=0, global_avg_c4=0,
-      global_avg_a5=0, global_avg_b5=0, global_avg_c5=0,
-      global_avg_a6=0, global_avg_b6=0, global_avg_c6=0,
-      global_avg_a7=0, global_avg_b7=0, global_avg_c7=0;
-
-    for (i=0; i<150528; i+=24) {
+	float global_avg_a=0,global_avg_b=0,global_avg_c=0;
+    for (i=0; i<150528; i+=12) {
 		#pragma HLS pipeline II=1
         global_avg_a += input_1_input_array[i];
 		global_avg_b += input_1_input_array[i+1];
 		global_avg_c += input_1_input_array[i+2];
-
-		global_avg_a1 += input_1_input_array[i+3];
-		global_avg_b1 += input_1_input_array[i+4];
-		global_avg_c1 += input_1_input_array[i+5];
-
-		global_avg_a2 += input_1_input_array[i+6];
-		global_avg_b2 += input_1_input_array[i+7];
-		global_avg_c2 += input_1_input_array[i+8];
-
-		global_avg_a3 += input_1_input_array[i+9];
-		global_avg_b3 += input_1_input_array[i+10];
-		global_avg_c3 += input_1_input_array[i+11];
-
-		global_avg_a4 += input_1_input_array[i+12];
-		global_avg_b4 += input_1_input_array[i+13];
-		global_avg_c4 += input_1_input_array[i+14];
-
-		global_avg_a5 += input_1_input_array[i+15];
-		global_avg_b5 += input_1_input_array[i+16];
-		global_avg_c5 += input_1_input_array[i+17];
-
-		global_avg_a6 += input_1_input_array[i+18];
-		global_avg_b6 += input_1_input_array[i+19];
-		global_avg_c6 += input_1_input_array[i+20];
-
-		global_avg_a7 += input_1_input_array[i+21];
-		global_avg_b7 += input_1_input_array[i+22];
-		global_avg_c7 += input_1_input_array[i+23];
     }
 
-	global_avg_a += global_avg_a1;
-	global_avg_b += global_avg_b1;
-	global_avg_c += global_avg_c1;
-
-	global_avg_a2 += global_avg_a3;
-	global_avg_b2 += global_avg_b3;
-	global_avg_c2 += global_avg_c3;
-
-	global_avg_a4 += global_avg_a5;
-	global_avg_b4 += global_avg_b5;
-	global_avg_c4 += global_avg_c5;
-
-	global_avg_a6 += global_avg_a7;
-	global_avg_b6 += global_avg_b7;
-	global_avg_c6 += global_avg_c7;
-
-
-	global_avg_a += global_avg_a2;
-	global_avg_b += global_avg_b2;
-	global_avg_c += global_avg_c2;
-
-	global_avg_a4 += global_avg_a6;
-	global_avg_b4 += global_avg_b6;
-	global_avg_c4 += global_avg_c6;
-
-	global_avg_a += global_avg_a4;
-	global_avg_b += global_avg_b4;
-	global_avg_c += global_avg_c4;
-
-	global_avg_a /= 50176;
-	global_avg_b /= 50176;
-	global_avg_c /= 50176;
+	const float num_inv = 150528/3;
+	global_avg_a /= num_inv;
+	global_avg_b /= num_inv;
+	global_avg_c /= num_inv;
 
 	for (j = 0;  j < 101; ++j) {
-		#pragma HLS pipeline II=1
 		float temp1 = global_avg_a * dense_kernel_array[j];
 		float temp2 = global_avg_b * dense_kernel_array[101+j];
 		float temp3 = global_avg_c * dense_kernel_array[202+j];
@@ -510,7 +443,9 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
         if (activation_output_array[i] < 0.0f) {
             activation_output_array[i] = 0.0f;
         }
-		else if (activation_output_array[i]>xmax) {
+    }
+    for (i=0; i < 101; ++i) {
+        if (activation_output_array[i]>xmax) {
             xmax = activation_output_array[i];
         }
     }
@@ -518,12 +453,14 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 	float sum = 0;
     for (i=0; i < 101; ++i) {
         activation_output_array[i] = expf(activation_output_array[i]-xmax);
+    }
+
+    for (i=0; i < 101; ++i) {
 		sum += activation_output_array[i];
     }
 
     sum = 1.0f/sum;
     for (i=0; i < 101; ++i) {
-		#pragma HLS pipeline II=1
         activation_output_array[i] = activation_output_array[i]*sum;
     }
 }
