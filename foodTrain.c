@@ -6,6 +6,7 @@
 size_t i,j,k;
 
 void foodTrain(float input_1_input_array[150528],float activation_output_array[101]){
+	#pragma HLS ARRAY_PARTITION variable=input_1_input_array cyclic factor=6
 
 	static const float dense_kernel_array[303] = {
 		-1.87843233e-01f,
@@ -417,15 +418,41 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 		+0.00000000e+00f,
 	};
 
-	// #pragma HLS array_partition variable=input_1_input_array type=cyclic  factor=3
-
 	float global_avg_a=0,global_avg_b=0,global_avg_c=0;
-    for (i=0; i<150528; i+=3) {
+	float global_avg_a1=0, global_avg_b1=0,global_avg_c1=0;
+	float global_avg_a2=0, global_avg_b2=0,global_avg_c2=0;
+	float global_avg_a3=0, global_avg_b3=0,global_avg_c3=0;
+    for (i=0; i<150528; i+=12) {
 		#pragma HLS pipeline II=1
         global_avg_a += input_1_input_array[i];
 		global_avg_b += input_1_input_array[i+1];
 		global_avg_c += input_1_input_array[i+2];
+
+		global_avg_a1 += input_1_input_array[i+3];
+		global_avg_b1 += input_1_input_array[i+4];
+		global_avg_c1 += input_1_input_array[i+5];
+
+		global_avg_a2 += input_1_input_array[i+6];
+		global_avg_b2 += input_1_input_array[i+7];
+		global_avg_c2 += input_1_input_array[i+8];
+
+		global_avg_a3 += input_1_input_array[i+9];
+		global_avg_b3 += input_1_input_array[i+10];
+		global_avg_c3 += input_1_input_array[i+11];
     }
+
+	global_avg_a += global_avg_a1;
+	global_avg_b += global_avg_b1;
+	global_avg_c += global_avg_c1;
+
+	global_avg_a2 += global_avg_a3;
+	global_avg_b2 += global_avg_b3;
+	global_avg_c2 += global_avg_c3;
+
+	global_avg_a += global_avg_a2;
+	global_avg_b += global_avg_b2;
+	global_avg_c += global_avg_c2;
+
 
 	const float num_inv = 150528/3;
 	global_avg_a /= num_inv;
@@ -462,7 +489,7 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 
     sum = 1.0f/sum;
     for (i=0; i < 101; ++i) {
-		// #pragma HLS unroll factor=2
+		#pragma HLS pipeline II=1
         activation_output_array[i] = activation_output_array[i]*sum;
     }
 }
