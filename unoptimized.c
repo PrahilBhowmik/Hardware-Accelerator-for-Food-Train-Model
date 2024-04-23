@@ -417,7 +417,7 @@ void foodTrain(float input_1_input_array[150528],float activation_output_array[1
 	};
 
 	float global_avg_a=0,global_avg_b=0,global_avg_c=0;
-    for (i=0; i<150528; i+=12) {
+    for (i=0; i<150528; i+=3) {
 		#pragma HLS pipeline II=1
         global_avg_a += input_1_input_array[i];
 		global_avg_b += input_1_input_array[i+1];
